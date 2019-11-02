@@ -54,14 +54,14 @@ class Node(object):
     def get_index(self):
         return self._index
 
-    def get_min_arr(self):
+    def get_head(self):
         return self._queue[0]
 
-    def set_min_arr(self, z):
+    def set_head(self, z):
         self._queue[0] = z
 
-    def delete_min_arr(self):
-        self._queue.popleft()
+    def pop(self):
+        self._queue.pop()
 
     def print_queue(self):
         print("The node index is:")
@@ -96,22 +96,49 @@ def generate_arrival(avg_num):
     return arrival_list
 
 def generate_node(node_num, avg_num):
+    global node_list
     node_list = []
     for i in range(0, node_num):
         node_list.append(Node(i, 0, 0, [generate_arrival(avg_num)]))
     return node_list
 
-def sender(node_list):
-    min_arr = list[0]
+def get_sender_time():
+    min_arr = node_list[0].get_head
     for node in node_list:
         if min_arr > node.get_min_arr():
             min_arr = node
     return min_arr
 
-def check_collision(node_list):
-    sender = sender(node_list)
+def is_busy(node):
+
+    current_node = node
+
+    #get sender information
+    sender_time = get_sender_time()
+    sender_index = sender_time.get_index()
+
+    prop_time = abs(sender_index - current_node.get_index())*t_prop
+    arr_time = current_node.get_head()
+    
+    #bus is busy, current node waits
+    if(sender_time + prop_time < arr_time < sender_time + prop_time + t_tran):
+        new_node = deque()
+        wait_time = sender_time + prop_time + t_tran - arr_time
+        #update the node so all entries are added the wait time
+        for current_packet in current_node:
+            new_packet = current_packet + wait_time
+            new_node.append(new_packet)
+        result = new_node
+    #bus not busy
+    else:
+        result = current_node
+
+    return result
+
+def check_collision():
+    sender = get_sender_time()
     sender_index = sender.get_index()
-    sender_arr = sender.get_min_arr()
+    sender_arr = sender.get_head()
 
     is_collision = 0
     # check if the collision happens and handle collision
@@ -127,12 +154,13 @@ def check_collision(node_list):
             else:
                 succ_packets += 1
     if is_collision == 0:
-        sender.delete_min_arr()
+        sender.pop()
 
 def handle_collision(node):
     # if the collision counter gets 10, drop the packet at current node
     if node.get_c_count > 10:
-        node.delete_min_arr()
+        node.pop()
+        #To do---------------------------------------not sure if a new packet should be added to the queue
         node.reset_c()
     else:
         exp_backoff(node)
@@ -140,16 +168,14 @@ def handle_collision(node):
 def exp_backoff(node):
     i = node.get_c_count()
     t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
+    #update the node packets with the wait time
+    new_node = deque()
+    for current_packet in node:
+        new_packet = current_packet + t_wait
+        new_node.append(new_packet)
+    result = new_node
     
-    if node.get_min_arr() < t_wait:
-        node.set_min_arr(t_wait)
-
-
-    return 0
-
-def is_busy():
-
-    return 0
+    return result
 
 def main():
     N = [20, 40, 60, 80, 100]

@@ -61,7 +61,7 @@ class Node(object):
     def set_head(self, z):
         self._queue[0] = z
 
-    def pop(self):
+    def pop_head(self):
         self._queue.popleft()
 
     def print(self):
@@ -110,40 +110,51 @@ def get_sender():
             min_arr = node
     return min_arr
 
-def is_busy(node, mode):
-    #get sender information
-    sender = get_sender()
+def is_busy(node, mode, sender):
+
+    index = 0
+    #get sender and node information
+    node_packets = node.get_queue()
     sender_index = sender.get_index()
     sender_time = sender.get_head()
+    index = 0
 
     prop_time = abs(sender_index - node.get_index()) * t_prop
-    
-    #bus is busy, current node waits
-    for packet in node.get_queue():
+
+    for packet in node_packets:
+        #bus is busy, current node waits
+        #print('lower:', sender_time + prop_time, ' packet:', packet, ' upper:',sender_time + prop_time + t_tran)
         if(sender_time + prop_time < packet < sender_time + prop_time + t_tran):
+            print('-------------------------------------------------------busy')
+            # inpersistent mode
             if mode == 1:
                 node.inc_b_count(1)
+                #busy counter exceeds 10, drop the packet, reset busy counter
                 if node.get_b_count > 10:
-                    node.pop()
+                    node.pop_head()
                     node.reset_b()
                 else:
                     i = node.get_c_count()
                     t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
-
                     #update the node packets with the wait time
-                    packet = packet + t_wait
-                    
+                    node_packets[index] = packet + t_wait
+            #persistent mode        
             else:
-                packet = sender_time + prop_time + t_tran
+                node_packets[index] = sender_time + prop_time + t_tran
 
-def check_collision(node):
-    sender = get_sender()
+        index = index + 1
+
+def check_collision(node, sender):
+    #get sender information
     sender_index = sender.get_index()
     sender_time = sender.get_head()
-
+    global trans_packets
+    #print('sender time:', sender_time)
     is_collision = 0
     # check if the collision happens and handle collision
+    #print('Node head: ', node.get_head(), ' Sender time: ', sender_time, ' tp:', abs(node.get_index() - sender_index) * t_prop)
     if node.get_head() < sender_time + (abs(node.get_index() - sender_index) * t_prop):
+        print('------------------------collision')
         node.inc_c_count(1)
         is_collision = 1
         trans_packets += 1
@@ -154,19 +165,24 @@ def check_collision(node):
 def handle_collision(node):
     # if the collision counter gets 10, drop the packet at current node
     if node.get_c_count > 10:
-        node.pop()
+        print('i reached 10')
+        node.pop_head()
         node.reset_c()
     else:
         exp_backoff(node)
 
 def exp_backoff(node):
-    i = node.get_c_count()
-    t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
-    #update the node packets with the wait time
+    node_index = 0
 
-    for packet in node.get_queue():
-        if packet.get_head() < t_wait:
-            packet = t_wait
+    node_packets = node.get_queue()
+
+    t_wait = rn.uniform(0, (pow(2, node.get_c_count()) - 1)) * t_p
+
+    #update the node packets with the wait time
+    for n_packet in node_packets:
+        if n_packet < t_wait:
+            node_packets[node_index] = t_wait
+        
 
 def main():
     N = [20, 40, 60, 80, 100]
@@ -174,34 +190,35 @@ def main():
     global succ_packets
 
     node_list = generate_node(5, 7)
-    # for node in node_list:
-    #     node.print()
-    #     print()
 
     sender = get_sender()
     sender_time = sender.get_head()
 
     while(sender_time <= T):
 
+        sender = get_sender()
+        sender_time = sender.get_head()
+        
         for node in node_list:
+            
             if(node.get_queue()):
-                # Persistent mode
-                is_busy(node, 0)
-                is_collision = check_collision(node)
+                is_busy(node, 0, sender)
+                is_collision = check_collision(node,sender)
 
         if is_collision == 1:
             handle_collision(sender)
             sender.inc_c_count(1)
         else:
+            sender.pop_head()
+            print('-------No collision')
             succ_packets += 1
+
     
     efficiency = succ_packets / trans_packets
     throughput = (L * succ_packets) / ((sender_time + L / R) * pow(10, -6))
 
     print("The Efficiency is: ", efficiency)
     print("The Throughput is: ", throughput, "Mbps" )
-
-
 
 
 if __name__ == '__main__':

@@ -185,40 +185,44 @@ def exp_backoff(node):
         
 
 def main():
-    N = [20, 40, 60, 80, 100]
-    A = [7, 10, 20]
+    N = [7]
+    A = [5]
+    mode = [0]
     global succ_packets
 
-    node_list = generate_node(5, 7)
+    for i in mode:
+        print("In Persistent Mode") if i == 0 else print("In Non-persistent Mode")
+        for j in A:
+            for k in N:
+                print("The current A is: ", j, "The current N is: ", k)
+                node_list = generate_node(k, j)
 
-    sender = get_sender()
-    sender_time = sender.get_head()
+                sender = get_sender()
+                sender_time = sender.get_head()
 
-    while(sender_time <= T):
+                while(sender_time <= T):
+                    sender = get_sender()
+                    sender_time = sender.get_head()
 
-        sender = get_sender()
-        sender_time = sender.get_head()
-        
-        for node in node_list:
-            
-            if(node.get_queue()):
-                is_busy(node, 0, sender)
-                is_collision = check_collision(node,sender)
+                    for node in node_list:
+                        if(node.get_queue()):
+                            # Persistent mode
+                            is_busy(node, 0, sender)
+                            is_collision = check_collision(node, sender)
 
-        if is_collision == 1:
-            handle_collision(sender)
-            sender.inc_c_count(1)
-        else:
-            sender.pop_head()
-            print('-------No collision')
-            succ_packets += 1
+                    if is_collision == 1:
+                        handle_collision(sender)
+                        sender.inc_c_count(1)
+                    else:
+                        sender.pop_head()
+                        print("-------No collision")
+                        succ_packets += 1
+                
+                efficiency = succ_packets / trans_packets
+                throughput = (L * succ_packets) / ((sender_time + L / R) * pow(10, -6))
 
-    
-    efficiency = succ_packets / trans_packets
-    throughput = (L * succ_packets) / ((sender_time + L / R) * pow(10, -6))
-
-    print("The Efficiency is: ", efficiency)
-    print("The Throughput is: ", throughput, "Mbps" )
+                print("The Efficiency is: ", efficiency, "The Throughput is: ", throughput, "Mbps" )
+                print()
 
 
 if __name__ == '__main__':

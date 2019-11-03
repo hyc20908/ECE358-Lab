@@ -14,6 +14,7 @@ t_tran = L / R
 max_collision = 10
 trans_packets = 0
 succ_packets = 0
+node_list = []
 
 class Node(object):
     
@@ -61,9 +62,9 @@ class Node(object):
         self._queue[0] = z
 
     def pop(self):
-        self._queue.pop()
+        self._queue.popleft()
 
-    def print_queue(self):
+    def print(self):
         print("The node index is:")
         print(self._index)
         print()
@@ -99,92 +100,118 @@ def generate_node(node_num, avg_num):
     global node_list
     node_list = []
     for i in range(0, node_num):
-        node_list.append(Node(i, 0, 0, [generate_arrival(avg_num)]))
+        node_list.append(Node(i, 0, 0, generate_arrival(avg_num)))
     return node_list
 
-def get_sender_time():
-    min_arr = node_list[0].get_head
+def get_sender():
+    min_arr = node_list[0]
     for node in node_list:
-        if min_arr > node.get_min_arr():
+        if min_arr.get_head() > node.get_head():
             min_arr = node
     return min_arr
 
-def is_busy(node):
+def is_busy(node, mode):
 
     current_node = node
 
     #get sender information
-    sender_time = get_sender_time()
-    sender_index = sender_time.get_index()
-
-    prop_time = abs(sender_index - current_node.get_index())*t_prop
-    arr_time = current_node.get_head()
-    
-    #bus is busy, current node waits
-    if(sender_time + prop_time < arr_time < sender_time + prop_time + t_tran):
-        new_node = deque()
-        wait_time = sender_time + prop_time + t_tran - arr_time
-        #update the node so all entries are added the wait time
-        for current_packet in current_node:
-            new_packet = current_packet + wait_time
-            new_node.append(new_packet)
-        result = new_node
-    #bus not busy
-    else:
-        result = current_node
-
-    return result
-
-def check_collision():
-    sender = get_sender_time()
+    sender = get_sender()
     sender_index = sender.get_index()
-    sender_arr = sender.get_head()
+    sender_time = sender.get_head()
+
+    prop_time = abs(sender_index - current_node.get_index()) * t_prop
+    
+    node.print()
+    #bus is busy, current node waits
+    for packet in node.get_queue():
+        if(sender_time + prop_time < packet < sender_time + prop_time + t_tran):
+            if mode == 1:
+                current_node.inc_b_count(1)
+                if current_node.get_b_count > 10:
+                    current_node.pop()
+                    current_node.reset_b()
+                else:
+                    i = node.get_c_count()
+                    t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
+
+                    #update the node packets with the wait time
+                    packet = packet + t_wait
+                    
+            else:
+                packet = sender_time + prop_time + t_tran
+
+def check_collision(node):
+    sender = get_sender()
+    sender_index = sender.get_index()
+    sender_time = sender.get_head()
 
     is_collision = 0
     # check if the collision happens and handle collision
-    for node in node_list:
-        if node.get_index() != sender_index:
-            if node.get_min_arr() < sender_arr + (abs(node.get_index() - sender_index) * t_prop):
-                node.inc_c_count(1)
-                sender.inc_c_count(1)
-                is_collision = 1
-                trans_packets += 1
-                handle_collision(node)
-                handle_collision(sender)
-            else:
-                succ_packets += 1
-    if is_collision == 0:
-        sender.pop()
+    if node.get_head() < sender_time + (abs(node.get_index() - sender_index) * t_prop):
+        node.inc_c_count(1)
+        is_collision = 1
+        trans_packets += 1
+        handle_collision(node)
+    
+    return is_collision
 
 def handle_collision(node):
     # if the collision counter gets 10, drop the packet at current node
     if node.get_c_count > 10:
         node.pop()
-        #To do---------------------------------------not sure if a new packet should be added to the queue
         node.reset_c()
     else:
         exp_backoff(node)
 
-def exp_backoff(node):
+def exp_backoff(node, mode):
     i = node.get_c_count()
     t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
     #update the node packets with the wait time
-    new_node = deque()
-    for current_packet in node:
-        new_packet = current_packet + t_wait
-        new_node.append(new_packet)
-    result = new_node
-    
-    return result
+
+    for packet in node.get_queue():
+        if packet.get_head() < t_wait:
+            packet = t_wait
 
 def main():
     N = [20, 40, 60, 80, 100]
     A = [7, 10, 20]
-    
+    empty = 0
+    global succ_packets
+
     node_list = generate_node(5, 7)
-    for node in node_list:
-        node.print_queue()
-        print()
+    # for node in node_list:
+    #     node.print()
+    #     print()
+
+    sender = get_sender()
+    sender_time = sender.get_head()
+
+    while(empty == 0):
+
+        for node in node_list:
+            if(node.get_queue()):
+                # Persistent mode
+                is_busy(node, 0)
+                is_collision = check_collision(node)
+
+        if is_collision == 1:
+            handle_collision(sender)
+            sender.inc_c_count(1)
+        else:
+            succ_packets += 1
+
+        for node in node_list:
+            if len(node.get_queue()) == 0:
+                empty = 1
+    
+    efficiency = succ_packets / trans_packets
+    throughput = (L * succ_packets) / ((sender_time + L / R) * pow(10, -6))
+
+    print("The Efficiency is: ", efficiency)
+    print("The Throughput is: ", throughput, "Mbps" )
+
+
+
 
 if __name__ == '__main__':
     main()

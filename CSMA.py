@@ -111,25 +111,21 @@ def get_sender():
     return min_arr
 
 def is_busy(node, mode):
-
-    current_node = node
-
     #get sender information
     sender = get_sender()
     sender_index = sender.get_index()
     sender_time = sender.get_head()
 
-    prop_time = abs(sender_index - current_node.get_index()) * t_prop
+    prop_time = abs(sender_index - node.get_index()) * t_prop
     
-    node.print()
     #bus is busy, current node waits
     for packet in node.get_queue():
         if(sender_time + prop_time < packet < sender_time + prop_time + t_tran):
             if mode == 1:
-                current_node.inc_b_count(1)
-                if current_node.get_b_count > 10:
-                    current_node.pop()
-                    current_node.reset_b()
+                node.inc_b_count(1)
+                if node.get_b_count > 10:
+                    node.pop()
+                    node.reset_b()
                 else:
                     i = node.get_c_count()
                     t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
@@ -163,7 +159,7 @@ def handle_collision(node):
     else:
         exp_backoff(node)
 
-def exp_backoff(node, mode):
+def exp_backoff(node):
     i = node.get_c_count()
     t_wait = rn.uniform(0, (pow(2, i) - 1)) * t_p
     #update the node packets with the wait time
@@ -175,7 +171,6 @@ def exp_backoff(node, mode):
 def main():
     N = [20, 40, 60, 80, 100]
     A = [7, 10, 20]
-    empty = 0
     global succ_packets
 
     node_list = generate_node(5, 7)
@@ -186,7 +181,7 @@ def main():
     sender = get_sender()
     sender_time = sender.get_head()
 
-    while(empty == 0):
+    while(sender_time <= T):
 
         for node in node_list:
             if(node.get_queue()):
@@ -199,10 +194,6 @@ def main():
             sender.inc_c_count(1)
         else:
             succ_packets += 1
-
-        for node in node_list:
-            if len(node.get_queue()) == 0:
-                empty = 1
     
     efficiency = succ_packets / trans_packets
     throughput = (L * succ_packets) / ((sender_time + L / R) * pow(10, -6))

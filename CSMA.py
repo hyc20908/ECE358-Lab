@@ -70,20 +70,6 @@ class Node(object):
     def pop_head(self):
         self._queue.popleft()
 
-    def print(self):
-        print("The node index is:")
-        print(self._index)
-        print()
-        print("The collision counter is:")
-        print(self._c_count)
-        print()
-        print("The bus busy counter is:")
-        print(self._b_count)
-        print()
-        print("The queue of the current node is:")
-        print(self._queue)
-        print()
-
 def generate_arrival(avg_num): 
     arrival_list = deque()
     count = 0
@@ -252,10 +238,7 @@ def main():
                 throughput = (succ_packets / T) * t_tran
 
                 f.write("\n{}, {}, {}, {}".format(j, k, efficiency, throughput))
-                # print("transmitted: ", trans_packets + succ_packets, "succeed: ", succ_packets)
-                # print("The Efficiency is: ", efficiency, "The Throughput is: ", throughput, "Mbps" )
                 print(j, k, " Efficiency: ", efficiency, "Throughput: ", throughput, "Mbps" )
-                # print()
     f.close
 
 if __name__ == '__main__':

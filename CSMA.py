@@ -16,6 +16,8 @@ trans_packets = 0
 succ_packets = 0
 node_list = []
 is_collision = 0
+master_packet = 88
+insta = 100
 
 class Node(object):
     
@@ -116,20 +118,17 @@ def get_sender():
             min_arr = node
     return min_arr
 
-def is_busy(node, mode, sender):
+def is_busy(node, mode, sender, max_index):
 
-    index = 0
     #get sender and node information
-    #node_packets = node.get_queue()
     sender_index = sender.get_index()
     sender_time = sender.get_head()
-    index = 0
 
     prop_time = abs(sender_index - node.get_index()) * t_prop
+    delay_time = abs(sender_index - max_index) * t_prop
 
-    #for packet in node_packets:
-        #bus is busy, current node waits
-    if(sender_time + prop_time < node.get_head() < sender_time + prop_time + t_tran):
+    #bus is busy, current node waits
+    if(sender_time + prop_time < node.get_head() < sender_time + delay_time + t_tran):
         # inpersistent mode
         if mode == 1:
             node.inc_b_count(1)
@@ -140,19 +139,17 @@ def is_busy(node, mode, sender):
                 node.reset_b()
                 node.reset_c()
             else:
-                t_wait = (rn.uniform(0, (pow(2, b_counter) - 1)) * t_p) / 100000
-                #print('twait: ', t_wait)
+                t_wait = (rn.uniform(0, (pow(2, b_counter) - 1)) * t_p) / 1000000
                 #update the node packets with the wait time
-                #node.get_queue()[index] = sender_time + prop_time + t_tran + t_wait
-                node.get_queue()[index] = sender_time + prop_time + t_wait
+                node.get_queue()[0] = sender_time + delay_time + t_tran + t_wait
                 
-        #persistent mode        
+        #persistent mode
         else:
-            node.get_queue()[index] = sender_time + prop_time + t_tran
-        #print('busy add: ', node.get_head())
+            node.get_queue()[0] = sender_time + delay_time + t_tran
 
-def check_collision(node, sender):
+def check_collision(node, sender, max_index):
     global is_collision
+
     #get sender information
     sender_index = sender.get_index()
     sender_time = sender.get_head()
@@ -162,27 +159,25 @@ def check_collision(node, sender):
     # hit collision
     if node.get_head() < sender_time + prop_time:
         is_collision = 1
-        handle_collision(node)
+        handle_collision(node, max_index, sender_index, sender_time)
     
     #return is_collision
 
-def handle_collision(node):
+def handle_collision(node, max_index, sender_index, sender_time):
     global trans_packets
 
     node.inc_c_count(1)
     trans_packets += 1
     # if the collision counter gets 10, drop the packet at current node
     if node.get_c_count() > 10:
-        # print('i reached 10')
         node.pop_head()
         node.reset_c()
         node.reset_b()
     else:
-        exp_backoff(node)
+        exp_backoff(node, max_index, sender_index, sender_time)
 
-def exp_backoff(node):
+def exp_backoff(node, max_index, sender_index, sender_time):
     node_index = 0
-
     node_packets = node.get_queue()
 
     t_wait = rn.uniform(0, (pow(2, node.get_c_count()) - 1)) * t_p
@@ -190,69 +185,78 @@ def exp_backoff(node):
     #update the node packets with the wait time
     for n_packet in node_packets:
         if n_packet < t_wait:
-            node_packets[node_index] += t_wait
+            node_packets[node_index] = sender_time + abs(sender_index - max_index) * t_prop + t_wait
         node_index += 1
-        
 
 def main():
     N = [20, 40, 60, 80, 100]
     A = [7, 10, 20]
-    # N = [20]
-    # A = [7]
-    mode = [1]# 0 for persisten, 1 for non-persistent
+    mode = [0, 1]# 0 for persisten, 1 for non-persistent
     global succ_packets
     global trans_packets
     global is_collision
 
     for i in mode:
         print("----------In Persistent Mode----------") if i == 0 else print("----------In Non-persistent Mode----------")
-        # if i == 0:
-        #     f = open("persistent.csv", "w")
-        # else:
-        #     f = open("non_persistent.csv", "w")
-        # f.write("A, N, Efficiency, throughput")
+        if i == 0:
+            f = open("persistent.csv", "w")
+        else:
+            f = open("non_persistent.csv", "w")
+        f.write("A, N, Efficiency, throughput")
         
         for j in A:
             for k in N:
                 succ_packets = 0
                 trans_packets = 0
+                is_collision = 0
+                simu_time = 0
+                m = master_packet/insta
                 
-                print("The current A is: ", j, "The current N is: ", k)
                 node_list = generate_node(k, j)
-                # for node in node_list:
-                #     node.print()
+                
                 sender = get_sender()
                 sender_time = sender.get_head()
-                is_collision = 0
-
+                sender_index = sender.get_index()
+                max_index = sender_index
+                
                 #end loop if timed out or packets are run out
-                while(sender_time <= T and sender_time != -1):
+                while(simu_time < T and sender_time != -1):
                     #reset collision counter and update sender
                     is_collision = 0
                     
                     for node in node_list:
+                        if(abs(sender_index - node.get_index()) > abs(max_index - node.get_index())):
+                            max_index = abs(sender_index - node.get_index())
+
+                    for node in node_list:
                         if node.get_queue():
-                            check_collision(node, sender)
-                            is_busy(node, i, sender)
-                            
+                            check_collision(node, sender, max_index)
+                            is_busy(node, i, sender, max_index)
+
+                    # no collision, successul packets increment by 1      
                     if is_collision == 0:
                         sender.pop_head()
                         succ_packets += 1
-                        trans_packets += 1
-                    # else:
-                    #     trans_packets += 1
+
+                    max_time = sender_time + max_index * t_prop
+                    if (simu_time < max_time):
+                        simu_time = max_time
 
                     sender = get_sender()
                     sender_time = sender.get_head()
-                
-                efficiency = succ_packets / trans_packets
+                    sender_index = sender.get_index()
+
+                total_packets = trans_packets + succ_packets*m
+
+                efficiency = succ_packets / total_packets
                 throughput = (succ_packets / T) * t_tran
 
-                # f.write("\n{}, {}, {}, {}".format(j, k, efficiency, throughput))
-                print("transmitted: ", trans_packets, "succeed: ", succ_packets)
-                print("The Efficiency is: ", efficiency, "The Throughput is: ", throughput, "Mbps" )
-                print()
-    # f.close
+                f.write("\n{}, {}, {}, {}".format(j, k, efficiency, throughput))
+                # print("transmitted: ", trans_packets + succ_packets, "succeed: ", succ_packets)
+                # print("The Efficiency is: ", efficiency, "The Throughput is: ", throughput, "Mbps" )
+                print(j, k, " Efficiency: ", efficiency, "Throughput: ", throughput, "Mbps" )
+                # print()
+    f.close
 
 if __name__ == '__main__':
     main()
